@@ -1,0 +1,33 @@
+<IFX>
+   <SignonRq>
+      <SignonPswd>
+         <SignonRole>CSR</SignonRole>
+         <CustId>
+            <SPName>FiservICBS</SPName>
+            <CustLoginId>{{API_USER}}</CustLoginId>
+         </CustId>
+         <CustPswd>
+            <CryptType>NONE</CryptType>
+            <Pswd>{{API_PASSWORD}}</Pswd>
+         </CustPswd>
+         <GenSessKey>0</GenSessKey>
+      </SignonPswd>
+      <ClientApp>
+         <Org>Fiserv</Org><Name>IB</Name><Version>0.1</Version>
+         <ClientAppKey>{{CLIENT_APP_KEY}}</ClientAppKey>
+      </ClientApp>
+      <ComputerId>SGPVMAPRDEV03</ComputerId>
+      <InstitutionCode>BOCSR</InstitutionCode>
+   </SignonRq>
+   <CIFSvcRq>
+      <RqUID>{{UUID}}</RqUID>
+      <SPName>FiservICBS</SPName>
+      <CustProfBasicInqRq>
+         <RqUID>{{UUID}}</RqUID>
+         <CustId>
+            <SPName>FiservICBS</SPName>
+            <CustPermId>{{ACCNO}}</CustPermId>
+         </CustId>
+      </CustProfBasicInqRq>
+   </CIFSvcRq>
+</IFX>
