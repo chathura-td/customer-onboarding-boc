@@ -12,7 +12,21 @@ LOGDIR="$ROOT_DIR/logs"
 LOGFILE="$LOGDIR/api_$(date +%Y%m%d).log"
 DEBUG="${DEBUG:-N}"
 SKIP_SSL_VERIFY="${SKIP_SSL_VERIFY:-N}"
-CERT_FILE="${CERT_FILE:-$ROOT_DIR/certificate/sample.crt}"
+
+# Auto-detect certificate file if not explicitly set
+if [ -z "$CERT_FILE" ]; then
+  CERT_FILE=$(ls "$ROOT_DIR/certificate"/*.crt 2>/dev/null | head -n1)
+fi
+
+# Validate certificate exists if SSL verification is enabled
+if [ "$SKIP_SSL_VERIFY" != "Y" ]; then
+  if [ -z "$CERT_FILE" ] || [ ! -f "$CERT_FILE" ]; then
+    OUTPUT="ERROR|CERTIFICATE_NOT_SET"
+    echo "$OUTPUT" > "$OUTPUT_FILE"
+    [ "$STDOUT_OUTPUT" = "Y" ] && echo "$OUTPUT"
+    exit 1
+  fi
+fi
 
 trap "rm -f $REQ $RESP" EXIT
 

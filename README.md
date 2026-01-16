@@ -67,6 +67,7 @@ customer-onboarding-2/
 
 **Error Codes**:
 - `ERROR|ACCTNO_MISSING` - Account number parameter not provided
+- `ERROR|CERTIFICATE_NOT_SET` - No certificate file found in certificate/ directory and SSL verification is enabled
 - `ERROR|UUIDGEN_FAILED` - Unable to generate UUID
 - `ERROR|HTTP_XXX` - HTTP error (non-200 response)
 - `ERROR|INVALID_XML` - Response is not valid XML
@@ -103,6 +104,7 @@ Optional stdout output controlled by `STDOUT_OUTPUT=Y` environment variable.
 
 **Error Codes**:
 - `ERROR|ACCNO_MISSING` - CustPermId parameter not provided
+- `ERROR|CERTIFICATE_NOT_SET` - No certificate file found in certificate/ directory and SSL verification is enabled
 - `ERROR|UUIDGEN_FAILED` - Unable to generate UUID
 - `ERROR|HTTP_XXX` - HTTP error (non-200 response)
 - `ERROR|INVALID_XML_RESPONSE` - Response is not valid XML
@@ -158,12 +160,15 @@ ACCT_TYPE defaults to "SV" if not provided.
 |----------|---------|-------------|
 | `DEBUG` | `N` | Enable debug logging. Set to `Y` to log full request/response XML bodies, SSL status, and transformation output to daily log files |
 | `STDOUT_OUTPUT` | `N` | Display output to terminal. Set to `Y` to echo results to stdout in addition to file output (applies to `customer_profile_lookup.sh` and composite script) |
-| `SKIP_SSL_VERIFY` | `N` | Disable SSL certificate verification. Set to `Y` to skip certificate checks (insecure, for development only) |
-| `CERT_FILE` | `certificate/sample.crt` | Path to CA certificate file for SSL verification. Override with custom certificate path |
+| `SKIP_SSL_VERIFY` | `N` | Disable SSL certificate verification. Set to `Y` to skip certificate checks (insecure, for development only). **WARNING**: SSL is always enforced unless this flag is explicitly set |
+| `CERT_FILE` | Auto-detected | Path to CA certificate file. Defaults to first `.crt` file found in `certificate/` directory. Override with custom certificate path. **Required unless SKIP_SSL_VERIFY=Y** |
 
 **Notes**:
+- **Certificate is mandatory**: Scripts will fail with `ERROR|CERTIFICATE_NOT_SET` if no certificate is found and SSL verification is enabled (default)
+- SSL verification is ALWAYS enabled by default - the only way to bypass is by explicitly setting `SKIP_SSL_VERIFY=Y`
+- Place any `.crt` file in `certificate/` directory and it will be auto-detected
 - All scripts automatically log API calls (timestamp, parameters, UUID, HTTP status) to `logs/api_YYYYMMDD.log`
-- Debug logs include: SSL verification mode, full request XML, full response XML, XSLT transformation output
+- Debug logs include: SSL verification mode, certificate path, full request XML, full response XML, XSLT transformation output
 - Environment variables can be combined: `DEBUG=Y STDOUT_OUTPUT=Y ./scripts/customer_profile_lookup.sh 1234567890`
 
 ---
@@ -401,6 +406,13 @@ Write to File / Stdout
 
 ### Common Issues
 
+**Issue**: `ERROR|CERTIFICATE_NOT_SET`
+- **Cause**: No certificate file found in `certificate/` directory and SSL verification is enabled
+- **Solution**: 
+  - Place a valid `.crt` file in the `certificate/` directory (any filename works - it will auto-detect)
+  - Or set explicit path: `CERT_FILE=/path/to/cert.crt ./scripts/...`
+  - For development/testing only: `SKIP_SSL_VERIFY=Y ./scripts/...` (NOT recommended for production)
+
 **Issue**: `ERROR|UUIDGEN_FAILED`
 - **Cause**: `uuidgen` command not found or failed
 - **Solution**: Install uuid-runtime package: `apt-get install uuid-runtime` (Debian/Ubuntu) or `yum install util-linux` (RHEL/CentOS)
@@ -422,10 +434,11 @@ Write to File / Stdout
 **Issue**: SSL certificate verification failures
 - **Cause**: Certificate expired, invalid, or wrong certificate file
 - **Solution**:
-  - Verify certificate file exists and is readable: `ls -l certificate/sample.crt`
-  - Check certificate validity: `openssl x509 -in certificate/sample.crt -text -noout`
-  - Temporary workaround for development: `SKIP_SSL_VERIFY=Y`
-  - Update certificate: Replace `certificate/sample.crt` or use `CERT_FILE=/path/to/new.crt`
+  - Verify certificate file exists in `certificate/` directory: `ls -l certificate/`
+  - Check certificate validity: `openssl x509 -in certificate/your.crt -text -noout`
+  - Scripts auto-detect any `.crt` file in `certificate/` - just place your certificate there
+  - Temporary workaround for development: `SKIP_SSL_VERIFY=Y` (WARNING: insecure, development only)
+  - Update certificate: Replace the `.crt` file in `certificate/` directory or use `CERT_FILE=/path/to/new.crt`
 
 **Issue**: No output or empty files
 - **Cause**: Script executing but not producing expected output
@@ -452,11 +465,13 @@ Write to File / Stdout
 ## Best Practices
 
 ### Production Use
-1. **Always use SSL verification**: Never set `SKIP_SSL_VERIFY=Y` in production
-2. **Rotate certificates**: Keep `certificate/sample.crt` updated with valid certificates
-3. **Monitor logs**: Regularly review `logs/api_*.log` for errors and anomalies
-4. **Secure credentials**: Restrict access to XML templates containing credentials (chmod 600)
-5. **Output files**: Implement cleanup for `/tmp/*_profile.txt` files based on your retention policy
+1. **SSL verification is mandatory**: Scripts require a certificate file by default and will fail with `ERROR|CERTIFICATE_NOT_SET` if none found
+2. **Never bypass SSL in production**: Never set `SKIP_SSL_VERIFY=Y` in production environments
+3. **Certificate placement**: Place any valid `.crt` file in `certificate/` directory - it will be auto-detected
+4. **Rotate certificates**: Keep certificates updated; scripts automatically detect any `.crt` file in the directory
+5. **Monitor logs**: Regularly review `logs/api_*.log` for errors and anomalies
+6. **Secure credentials**: Restrict access to XML templates containing credentials (chmod 600)
+7. **Output files**: Implement cleanup for `/tmp/*_profile.txt` files based on your retention policy
 
 ### Development & Testing
 1. **Use DEBUG mode**: Enable `DEBUG=Y` to troubleshoot issues
@@ -482,17 +497,25 @@ find logs/ -name "api_*.log" -mtime +30 -delete
 ```
 
 ### Certificate Updates
-Replace the certificate file when expired or changed:
+Replace or add certificate files in the certificate directory:
 ```bash
-# Backup old certificate
-cp certificate/sample.crt certificate/sample.crt.bak
+# Simply copy your certificate to the certificate directory
+# Any .crt file will be auto-detected
+cp /path/to/your/new-certificate.crt certificate/
 
-# Install new certificate
-cp /path/to/new.crt certificate/sample.crt
+# Verify certificate
+openssl x509 -in certificate/new-certificate.crt -text -noout | grep "Not After"
 
-# Verify
-openssl x509 -in certificate/sample.crt -text -noout | grep "Not After"
+# Optional: Remove old certificates
+rm certificate/old-certificate.crt
+
+# Test with the new certificate
+./scripts/customer_profile_lookup.sh 1234567890
 ```
+
+**Note**: Scripts automatically detect the first `.crt` file found. If you have multiple certificates, either:
+- Keep only one `.crt` file in the directory, or
+- Use `CERT_FILE=/path/to/specific.crt` to specify which one to use
 
 ### Credential Rotation
 When API credentials change, update XML template files:
